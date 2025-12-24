@@ -1,0 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom tweaks if needed, but relying mostly on Tailwind utility classes now */
+body {
+  @apply bg-gray-50 text-gray-800 font-sans;
+}
