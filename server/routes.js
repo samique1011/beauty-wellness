@@ -1,19 +1,19 @@
 const express = require('express');
 const router = express.Router();
-const jwt = require('jsonwebtoken'); // Added for manual token signing in admin login
+const jwt = require('jsonwebtoken');
 const { User, Admin, Shop, Service, Booking, Review } = require('./models');
 const { verifyToken, generateToken } = require('./auth');
 
-// --- AUTH ---
+
 
 router.post('/register', async (req, res) => {
     try {
         const { name, email, password } = req.body;
-        // Simple check if user exists
+        // checking if the user exists or not
         const existing = await User.findOne({ email });
         if (existing) return res.status(400).json({ message: 'Email already exists' });
 
-        const user = new User({ name, email, password }); // Plain text password
+        const user = new User({ name, email, password }); 
         await user.save();
 
         const token = generateToken(user);
@@ -24,13 +24,11 @@ router.post('/register', async (req, res) => {
 });
 
 
-// Stored here as requested (or passed from index)
 
-// Admin Registration
 router.post('/register-admin', async (req, res) => {
     try {
         const { email, password, secretKey } = req.body;
-        if (secretKey !== 'admin_secret_key') {
+        if (secretKey !== 'admin@123') {
             return res.status(403).json({ message: 'Invalid Secret Key' });
         }
         const existing = await Admin.findOne({ email });
@@ -46,7 +44,6 @@ router.post('/register-admin', async (req, res) => {
     }
 });
 
-// Admin Login
 router.post('/login-admin', async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -62,7 +59,7 @@ router.post('/login-admin', async (req, res) => {
     }
 });
 
-// User Login
+// normal user login route
 router.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -70,12 +67,6 @@ router.post('/login', async (req, res) => {
         if (!user || user.password !== password) {
             return res.status(401).json({ message: 'Invalid credentials' });
         }
-        // Force role check if schema had it, but now schema doesn't have it.
-        // We know it's a user because we queried User collection.
-        // We can create a token with role: 'user' manually or use generateToken if we update it.
-        // Assuming generateToken just signs payload. Let's inspect generateToken later or just fix here.
-        // Actually generateToken probably reads user.role. Since user.role is gone, we should pass payload explicitly or update generateToken.
-        // For safety, I'll sign manually here to be sure, or update verifyToken.
 
         const token = jwt.sign({ id: user._id, role: 'user' }, 'supersecretkey_for_personal_project_123', { expiresIn: '24h' });
         res.json({ token, user: { id: user._id, name: user.name, role: 'user' } });
@@ -84,10 +75,7 @@ router.post('/login', async (req, res) => {
     }
 });
 
-// --- SHOPS ---
-
-// Get all shops
-// Get all shops (sorted by average rating)
+// getting all shops
 router.get('/shops', async (req, res) => {
     try {
         const shops = await Shop.find().populate('serviceIds');
@@ -105,7 +93,6 @@ router.get('/shops', async (req, res) => {
             };
         });
 
-        // Sort descending by averageRating
         shopsWithStats.sort((a, b) => b.averageRating - a.averageRating);
 
         res.json(shopsWithStats);
@@ -114,7 +101,6 @@ router.get('/shops', async (req, res) => {
     }
 });
 
-// Get single shop and increment visits
 router.get('/shops/:id', async (req, res) => {
     try {
         const shop = await Shop.findByIdAndUpdate(
@@ -174,22 +160,18 @@ router.post('/shops', verifyToken, upload.single('image'), async (req, res) => {
     }
 });
 
-// Delete shop (Admin only)
+// deleting a shop 
 router.delete('/shops/:id', verifyToken, async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ message: 'Admin only' });
     try {
         await Shop.findByIdAndDelete(req.params.id);
-        // Should also delete related services? Keeping it simple.
         res.json({ message: 'Shop deleted' });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// --- SERVICES ---
-
-// Get services for a shop
-// Actually shop object already populates serviceIds, but standalone route might be useful
+//getting the services for the shop
 router.get('/services/:shopId', async (req, res) => {
     try {
         const services = await Service.find({ shopid: req.params.shopId });
@@ -199,8 +181,7 @@ router.get('/services/:shopId', async (req, res) => {
     }
 });
 
-// Add service (Admin only)
-// Add service (Admin only - to their shop)
+// Adding the service
 router.post('/services', verifyToken, async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ message: 'Admin only' });
     try {
@@ -215,13 +196,13 @@ router.post('/services', verifyToken, async (req, res) => {
             description,
             price,
             availability: {
-                startTime: availability?.startTime || "09:00",
+                startTime: availability?.startTime || "09:00", //by default values
                 endTime: availability?.endTime || "17:00"
             }
         });
         await service.save();
 
-        // Update shop to include this service
+        // pushing the service to the shop
         await Shop.findByIdAndUpdate(shop._id, { $push: { serviceIds: service._id } });
 
         res.status(201).json(service);
@@ -230,14 +211,14 @@ router.post('/services', verifyToken, async (req, res) => {
     }
 });
 
-// Delete service (Admin only)
+// deleting the service
 router.delete('/services/:id', verifyToken, async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ message: 'Admin only' });
     try {
         const service = await Service.findByIdAndDelete(req.params.id);
         if (!service) return res.status(404).json({ message: 'Service not found' });
 
-        // Remove from shop's serviceIds array
+        // removing the service from the shop 
         await Shop.updateOne(
             { _id: service.shopid },
             { $pull: { serviceIds: service._id } }
@@ -249,9 +230,7 @@ router.delete('/services/:id', verifyToken, async (req, res) => {
     }
 });
 
-// --- BOOKINGS ---
-
-// Create booking (User only)
+//creating a booking for the user
 router.post('/bookings', verifyToken, async (req, res) => {
     if (req.userRole === 'admin') return res.status(403).json({ message: 'Admins cannot book services' });
     try {
@@ -261,7 +240,7 @@ router.post('/bookings', verifyToken, async (req, res) => {
             serviceId,
             date,
             time,
-            status: 'pending' // Default to pending
+            status: 'pending' 
         });
         await booking.save();
         res.status(201).json(booking);
@@ -270,7 +249,7 @@ router.post('/bookings', verifyToken, async (req, res) => {
     }
 });
 
-// Update booking status (Admin only)
+// update booking status
 router.put('/bookings/:id/status', verifyToken, async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ message: 'Admin only' });
     try {
@@ -291,33 +270,24 @@ router.put('/bookings/:id/status', verifyToken, async (req, res) => {
     }
 });
 
-// Get bookings
-// Get bookings
+// get all the bookings
 router.get('/bookings', verifyToken, async (req, res) => {
     try {
         if (req.userRole === 'admin') {
             // Admin sees bookings for THEIR shop only
             const shop = await Shop.findOne({ adminId: req.userId });
-            if (!shop) return res.json([]); // No shop, no bookings
-
-            // Find services belonging to this shop
-            // Then find bookings for those services
-            // Or since booking has serviceId, and service has shopid.
-
-            // let's fetch services for this shop first
-            // actually simpler: populate serviceId in booking and filter? 
-            // Better: find bookings where serviceId is in [list of service ids]
+            if (!shop) return res.json([]); 
 
             const services = await Service.find({ shopid: shop._id });
             const serviceIds = services.map(s => s._id);
 
             const bookings = await Booking.find({ serviceId: { $in: serviceIds } })
                 .populate('userId serviceId')
-                .sort({ date: 1, time: 1 }); // Sort for convenience
+                .sort({ date: 1, time: 1 }); 
 
             res.json(bookings);
         } else {
-            // User sees their own
+          
             const bookings = await Booking.find({ userId: req.userId })
                 .populate({
                     path: 'serviceId',
@@ -330,7 +300,7 @@ router.get('/bookings', verifyToken, async (req, res) => {
     }
 });
 
-// Admin Dashboard Stats
+// admin dashboard route
 router.get('/admin/dashboard', verifyToken, async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ message: 'Admin only' });
     try {
@@ -346,7 +316,6 @@ router.get('/admin/dashboard', verifyToken, async (req, res) => {
             ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length)
             : 0;
 
-        // Top services
         const serviceStats = {};
         bookings.forEach(b => {
             const sName = b.serviceId.title;
@@ -367,7 +336,7 @@ router.get('/admin/dashboard', verifyToken, async (req, res) => {
                 reviewCount: reviews.length,
                 topServices
             },
-            bookings // Return bookings here as well or use the separate endpoint
+            bookings 
         });
 
     } catch (err) {
@@ -375,20 +344,11 @@ router.get('/admin/dashboard', verifyToken, async (req, res) => {
     }
 });
 
-// --- REVIEWS ---
-
-// Add review
+// review section
 router.post('/reviews', verifyToken, async (req, res) => {
     try {
         const { shopId, rating, comment } = req.body;
 
-        // Check if user has a 'completed' booking for a service belonging to this shop
-        // First find services of this shop
-        // Actually, Booking has serviceId. service has shopid.
-        // We need to find if there is ANY booking for this user where booking.status === 'completed' AND booking.serviceId.shopid === shopId
-
-        // This requires a bit of a join or double query.
-        // Let's find all completed bookings for this user first
         const userBookings = await Booking.find({ userId: req.userId, status: 'completed' }).populate('serviceId');
 
         const hasVisitedShop = userBookings.some(booking =>
@@ -396,7 +356,7 @@ router.post('/reviews', verifyToken, async (req, res) => {
         );
 
         if (!hasVisitedShop) {
-            // Check if they have ANY booking for this shop
+            
             const anyBooking = await Booking.find({ userId: req.userId }).populate('serviceId');
             const hasAny = anyBooking.some(b => b.serviceId && b.serviceId.shopid.toString() === shopId);
 
@@ -420,7 +380,7 @@ router.post('/reviews', verifyToken, async (req, res) => {
     }
 });
 
-// Get reviews for a shop
+// getting the reviews for a shop
 router.get('/reviews/:shopId', async (req, res) => {
     try {
         const reviews = await Review.find({ shopId: req.params.shopId }).populate('userId', 'name');

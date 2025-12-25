@@ -1,56 +1,51 @@
 const mongoose = require('mongoose');
 
-// User Schema
+
 const userSchema = new mongoose.Schema({
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
-    slotIds: [{ type: String }] // Keeping it simple as array of strings for now
+    slotIds: [{ type: String }] 
 });
 
-// Admin Schema
+
 const adminSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true }
 });
 
-// Shop Schema
+
 const shopSchema = new mongoose.Schema({
     name: { type: String, required: true },
     location: { type: String, required: true },
-    description: { type: String }, // New field
+    description: { type: String }, 
     serviceIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Service' }],
-    image: { type: String }, // URL or placeholder
-    adminId: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', unique: true, required: true }, // Linked to Admin
-    visits: { type: Number, default: 0 } // Track profile visits
+    image: { type: String }, 
+    adminId: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', unique: true, required: true }, 
+    visits: { type: Number, default: 0 } 
 });
 
-// Service Schema
 const serviceSchema = new mongoose.Schema({
     shopid: { type: mongoose.Schema.Types.ObjectId, ref: 'Shop', required: true },
     title: { type: String, required: true },
     description: { type: String },
     price: { type: Number, required: true },
     availability: {
-        startTime: { type: String, required: true }, // e.g. "09:00"
-        endTime: { type: String, required: true }    // e.g. "17:00"
+        startTime: { type: String, required: true }, 
+        endTime: { type: String, required: true }   
     }
 });
 
-// Booking Schema
-// bookings table having (id , time , date , userId , serviced , status of booking)
-// Assuming 'serviced' is 'serviceId' from context.
 const bookingSchema = new mongoose.Schema({
     time: { type: String, required: true },
-    date: { type: String, required: true }, // Keeping strict to requirements: simple string or Date
+    date: { type: String, required: true }, 
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     serviceId: { type: mongoose.Schema.Types.ObjectId, ref: 'Service', required: true },
     status: { type: String, enum: ['pending', 'confirmed', 'completed', 'cancelled'], default: 'pending' },
-    adminComment: { type: String } // Comment from admin when changing status
+    adminComment: { type: String } 
 });
 
-// Review Schema
-// reviews table having (id , userid , timestamp , shopid)
+
 const reviewSchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     shopId: { type: mongoose.Schema.Types.ObjectId, ref: 'Shop', required: true },
