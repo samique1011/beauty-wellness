@@ -26,6 +26,26 @@ router.post('/register', async (req, res) => {
 
 // Stored here as requested (or passed from index)
 
+// Admin Registration
+router.post('/register-admin', async (req, res) => {
+    try {
+        const { email, password, secretKey } = req.body;
+        if (secretKey !== 'admin_secret_key') {
+            return res.status(403).json({ message: 'Invalid Secret Key' });
+        }
+        const existing = await Admin.findOne({ email });
+        if (existing) return res.status(400).json({ message: 'Admin email already exists' });
+
+        const admin = new Admin({ email, password });
+        await admin.save();
+
+        const token = jwt.sign({ id: admin._id, role: 'admin' }, 'supersecretkey_for_personal_project_123', { expiresIn: '24h' });
+        res.status(201).json({ token, user: { id: admin._id, name: 'Admin', role: 'admin' } });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Admin Login
 router.post('/login-admin', async (req, res) => {
     try {
@@ -94,6 +114,21 @@ router.get('/shops', async (req, res) => {
     }
 });
 
+// Get single shop and increment visits
+router.get('/shops/:id', async (req, res) => {
+    try {
+        const shop = await Shop.findByIdAndUpdate(
+            req.params.id,
+            { $inc: { visits: 1 } },
+            { new: true }
+        ).populate('serviceIds');
+        if (!shop) return res.status(404).json({ message: 'Shop not found' });
+        res.json(shop);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Add shop (Admin only)
 const multer = require('multer');
 const path = require('path');
@@ -119,13 +154,19 @@ const upload = multer({ storage: storage });
 router.post('/shops', verifyToken, upload.single('image'), async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ message: 'Admin only' });
     try {
+        // Enforce one shop per admin
+        const existingShop = await Shop.findOne({ adminId: req.userId });
+        if (existingShop) {
+            return res.status(400).json({ message: 'You can only create one shop.' });
+        }
+
         const { name, location, description } = req.body;
         let image = req.body.image; // fallback if URL provided in text
         if (req.file) {
             image = `http://localhost:5000/uploads/${req.file.filename}`;
         }
 
-        const shop = new Shop({ name, location, image, description });
+        const shop = new Shop({ name, location, image, description, adminId: req.userId });
         await shop.save();
         res.status(201).json(shop);
     } catch (err) {
@@ -159,15 +200,29 @@ router.get('/services/:shopId', async (req, res) => {
 });
 
 // Add service (Admin only)
+// Add service (Admin only - to their shop)
 router.post('/services', verifyToken, async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ message: 'Admin only' });
     try {
-        const { shopid, title, description, price } = req.body;
-        const service = new Service({ shopid, title, description, price });
+        // Find admin's shop
+        const shop = await Shop.findOne({ adminId: req.userId });
+        if (!shop) return res.status(404).json({ message: 'You must create a shop first' });
+
+        const { title, description, price, availability } = req.body;
+        const service = new Service({
+            shopid: shop._id,
+            title,
+            description,
+            price,
+            availability: {
+                startTime: availability?.startTime || "09:00",
+                endTime: availability?.endTime || "17:00"
+            }
+        });
         await service.save();
 
         // Update shop to include this service
-        await Shop.findByIdAndUpdate(shopid, { $push: { serviceIds: service._id } });
+        await Shop.findByIdAndUpdate(shop._id, { $push: { serviceIds: service._id } });
 
         res.status(201).json(service);
     } catch (err) {
@@ -237,18 +292,84 @@ router.put('/bookings/:id/status', verifyToken, async (req, res) => {
 });
 
 // Get bookings
+// Get bookings
 router.get('/bookings', verifyToken, async (req, res) => {
     try {
         if (req.userRole === 'admin') {
-            // Admin sees all? Or maybe dashboard stats?
-            // "dashboard which shows what users are preferring"
-            const bookings = await Booking.find().populate('userId serviceId');
+            // Admin sees bookings for THEIR shop only
+            const shop = await Shop.findOne({ adminId: req.userId });
+            if (!shop) return res.json([]); // No shop, no bookings
+
+            // Find services belonging to this shop
+            // Then find bookings for those services
+            // Or since booking has serviceId, and service has shopid.
+
+            // let's fetch services for this shop first
+            // actually simpler: populate serviceId in booking and filter? 
+            // Better: find bookings where serviceId is in [list of service ids]
+
+            const services = await Service.find({ shopid: shop._id });
+            const serviceIds = services.map(s => s._id);
+
+            const bookings = await Booking.find({ serviceId: { $in: serviceIds } })
+                .populate('userId serviceId')
+                .sort({ date: 1, time: 1 }); // Sort for convenience
+
             res.json(bookings);
         } else {
             // User sees their own
-            const bookings = await Booking.find({ userId: req.userId }).populate('serviceId');
+            const bookings = await Booking.find({ userId: req.userId })
+                .populate({
+                    path: 'serviceId',
+                    populate: { path: 'shopid', select: 'name location' }
+                });
             res.json(bookings);
         }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Admin Dashboard Stats
+router.get('/admin/dashboard', verifyToken, async (req, res) => {
+    if (req.userRole !== 'admin') return res.status(403).json({ message: 'Admin only' });
+    try {
+        const shop = await Shop.findOne({ adminId: req.userId }).populate('serviceIds');
+        if (!shop) return res.json({ hasShop: false });
+
+        const services = await Service.find({ shopid: shop._id });
+        const serviceIds = services.map(s => s._id);
+        const bookings = await Booking.find({ serviceId: { $in: serviceIds } }).populate('serviceId userId');
+        const reviews = await Review.find({ shopId: shop._id });
+
+        const avgRating = reviews.length > 0
+            ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length)
+            : 0;
+
+        // Top services
+        const serviceStats = {};
+        bookings.forEach(b => {
+            const sName = b.serviceId.title;
+            serviceStats[sName] = (serviceStats[sName] || 0) + 1;
+        });
+        const topServices = Object.entries(serviceStats)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 3)
+            .map(([name, count]) => ({ name, count }));
+
+        res.json({
+            hasShop: true,
+            shop,
+            stats: {
+                visits: shop.visits || 0,
+                bookingsCount: bookings.length,
+                avgRating: avgRating.toFixed(1),
+                reviewCount: reviews.length,
+                topServices
+            },
+            bookings // Return bookings here as well or use the separate endpoint
+        });
+
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

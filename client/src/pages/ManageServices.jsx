@@ -4,206 +4,178 @@ import { toast } from 'react-toastify';
 import { Link } from 'react-router-dom';
 
 const ManageServices = () => {
-    const [shops, setShops] = useState([]);
-    const [newShop, setNewShop] = useState({ name: '', location: '', image: '', description: '', imageFile: null });
-    const [newService, setNewService] = useState({ shopid: '', title: '', description: '', price: '' });
+    const [shop, setShop] = useState(null);
+    const [newService, setNewService] = useState({ title: '', description: '', price: '' });
+    const [loading, setLoading] = useState(true);
 
-    const fetchShops = async () => {
+    const fetchShopData = async () => {
         try {
-            const shopsData = await apiRequest('/shops');
-            setShops(shopsData);
+            const data = await apiRequest('/admin/dashboard');
+            if (data.hasShop) {
+                setShop(data.shop);
+            } else {
+                toast.warn("Please create a shop first.");
+            }
         } catch (err) {
             console.error(err);
-            toast.error('Failed to fetch shops');
+            toast.error('Failed to fetch shop data');
+        } finally {
+            setLoading(false);
         }
     };
 
     useEffect(() => {
-        fetchShops();
+        fetchShopData();
     }, []);
-
-    const handleAddShop = async (e) => {
-        e.preventDefault();
-        try {
-            const formData = new FormData();
-            formData.append('name', newShop.name);
-            formData.append('location', newShop.location);
-            formData.append('description', newShop.description);
-            if (newShop.imageFile) {
-                formData.append('image', newShop.imageFile);
-            }
-
-            await apiRequest('/shops', 'POST', formData);
-            setNewShop({ name: '', location: '', image: '', description: '', imageFile: null });
-            fetchShops();
-            toast.success('Shop added successfully!');
-        } catch (err) {
-            toast.error(err.message);
-        }
-    };
 
     const handleAddService = async (e) => {
         e.preventDefault();
         try {
-            await apiRequest('/services', 'POST', newService);
-            setNewService({ shopid: '', title: '', description: '', price: '' });
+            // Backend now infers shop from logged-in admin
+            const payload = {
+                ...newService,
+                availability: {
+                    startTime: newService.startTime,
+                    endTime: newService.endTime
+                }
+            };
+            await apiRequest('/services', 'POST', payload);
+            setNewService({ title: '', description: '', price: '', startTime: '', endTime: '' });
             toast.success('Service added!');
+            fetchShopData(); // Refresh list
         } catch (err) {
             toast.error(err.message);
         }
     };
 
+    if (loading) return (
+        <div className="min-h-screen flex items-center justify-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+        </div>
+    );
+
+    if (!shop) return (
+        <div className="max-w-4xl mx-auto px-4 py-12 text-center">
+            <h2 className="text-2xl font-bold mb-4">No Shop Found</h2>
+            <Link to="/admin" className="text-indigo-600 hover:text-indigo-800 underline">Go to Dashboard to create one.</Link>
+        </div>
+    );
+
     return (
         <div className="max-w-4xl mx-auto px-4 py-12">
             <div className="flex justify-between items-center mb-8">
-                <h1 className="text-3xl font-bold text-gray-900">Manage Services & Shops</h1>
-                <Link to="/admin" className="text-sm font-medium text-gray-600 hover:text-black">
+                <div>
+                    <h1 className="text-3xl font-bold text-gray-900">Manage Services</h1>
+                    <p className="text-gray-500">{shop.name}</p>
+                </div>
+                <Link to="/admin" className="text-sm font-medium text-gray-600 hover:text-black bg-gray-100 px-4 py-2 rounded-lg transition-colors">
                     ← Back to Dashboard
                 </Link>
             </div>
 
-            <div className="grid grid-cols-1 gap-8">
-                {/* Add Shop Form */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-                    <h3 className="text-xl font-bold text-gray-900 mb-6">Add New Parlour</h3>
-                    <form onSubmit={handleAddShop} className="space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <input
-                                type="text" placeholder="Shop Name" required
-                                value={newShop.name} onChange={e => setNewShop({ ...newShop, name: e.target.value })}
-                                className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-black focus:ring-black p-3 border"
-                            />
-                            <input
-                                type="text" placeholder="Location" required
-                                value={newShop.location} onChange={e => setNewShop({ ...newShop, location: e.target.value })}
-                                className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-black focus:ring-black p-3 border"
-                            />
-                        </div>
-                        <input
-                            type="text" placeholder="Description (e.g., Best parlor for...)"
-                            value={newShop.description} onChange={e => setNewShop({ ...newShop, description: e.target.value })}
-                            className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-black focus:ring-black p-3 border"
-                        />
-
-                        <div
-                            className={`border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer transition-colors ${newShop.imageFile ? 'border-green-500 bg-green-50' : 'border-gray-300 hover:border-black'}`}
-                            onDragOver={(e) => e.preventDefault()}
-                            onDrop={(e) => {
-                                e.preventDefault();
-                                const file = e.dataTransfer.files[0];
-                                if (file) setNewShop({ ...newShop, imageFile: file });
-                            }}
-                            onClick={() => document.getElementById('shopImageInput').click()}
-                        >
-                            <input
-                                id="shopImageInput"
-                                type="file"
-                                className="hidden"
-                                accept="image/*"
-                                onChange={(e) => {
-                                    if (e.target.files[0]) setNewShop({ ...newShop, imageFile: e.target.files[0] });
-                                }}
-                            />
-                            {newShop.imageFile ? (
-                                <div className="text-center">
-                                    <p className="text-green-600 font-medium">{newShop.imageFile.name}</p>
-                                    <p className="text-xs text-green-500">Ready to upload</p>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Add Service Form */}
+                <div className="lg:col-span-1">
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 sticky top-24">
+                        <h3 className="text-xl font-bold text-gray-900 mb-6">Add New Service</h3>
+                        <form onSubmit={handleAddService} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                                <input
+                                    type="text" required
+                                    value={newService.title} onChange={e => setNewService({ ...newService, title: e.target.value })}
+                                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-black focus:ring-black p-2 border"
+                                    placeholder="e.g. Haircut"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Price (₹)</label>
+                                <input
+                                    type="number" required
+                                    value={newService.price} onChange={e => setNewService({ ...newService, price: e.target.value })}
+                                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-black focus:ring-black p-2 border"
+                                    placeholder="0"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                                <textarea
+                                    value={newService.description} onChange={e => setNewService({ ...newService, description: e.target.value })}
+                                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-black focus:ring-black p-2 border h-24"
+                                    placeholder="Optional details..."
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
+                                    <input
+                                        type="time" required
+                                        value={newService.startTime || ''}
+                                        onChange={e => setNewService({ ...newService, startTime: e.target.value })}
+                                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-black focus:ring-black p-2 border"
+                                    />
                                 </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">End Time</label>
+                                    <input
+                                        type="time" required
+                                        value={newService.endTime || ''}
+                                        onChange={e => setNewService({ ...newService, endTime: e.target.value })}
+                                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-black focus:ring-black p-2 border"
+                                    />
+                                </div>
+                            </div>
+                            <button type="submit" className="w-full bg-black hover:bg-gray-800 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+                                Add Service
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                {/* Services List */}
+                <div className="lg:col-span-2">
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                        <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
+                            <h3 className="text-lg font-medium text-gray-900">Current Services</h3>
+                        </div>
+                        <div className="divide-y divide-gray-200">
+                            {shop.serviceIds && shop.serviceIds.length > 0 ? (
+                                shop.serviceIds.map(service => (
+                                    <div key={service._id} className="p-4 flex justify-between items-center hover:bg-gray-50 transition-colors">
+                                        <div>
+                                            <h4 className="font-bold text-gray-900">{service.title}</h4>
+                                            <p className="text-sm text-gray-500">{service.description}</p>
+                                            <p className="text-indigo-600 font-bold mt-1">₹{service.price}</p>
+                                        </div>
+                                        <button
+                                            onClick={async () => {
+                                                if (!window.confirm(`Delete "${service.title}"?`)) return;
+                                                try {
+                                                    await apiRequest(`/services/${service._id}`, 'DELETE');
+                                                    fetchShopData();
+                                                    toast.success('Service deleted');
+                                                } catch (err) {
+                                                    toast.error(err.message);
+                                                }
+                                            }}
+                                            className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50 transition-colors"
+                                            title="Delete Service"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                ))
                             ) : (
-                                <div className="text-center text-gray-500">
-                                    <p className="font-medium">Drag & Drop Image</p>
-                                    <p className="text-xs mt-1">or click to browse</p>
+                                <div className="p-8 text-center text-gray-500 italic">
+                                    No services added yet. Add one from the form.
                                 </div>
                             )}
                         </div>
-
-                        <button type="submit" className="w-full bg-black hover:bg-gray-800 text-white font-medium py-3 rounded-lg transition-colors shadow-sm">
-                            Add Shop
-                        </button>
-                    </form>
-                </div>
-
-                {/* Add Service Form */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-                    <h3 className="text-xl font-bold text-gray-900 mb-6">Add Service</h3>
-                    <form onSubmit={handleAddService} className="space-y-6">
-                        <select
-                            required value={newService.shopid} onChange={e => setNewService({ ...newService, shopid: e.target.value })}
-                            className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-black focus:ring-black p-3 border"
-                        >
-                            <option value="">Select Shop</option>
-                            {shops.map(shop => <option key={shop._id} value={shop._id}>{shop.name}</option>)}
-                        </select>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <input
-                                type="text" placeholder="Service Title" required
-                                value={newService.title} onChange={e => setNewService({ ...newService, title: e.target.value })}
-                                className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-black focus:ring-black p-3 border"
-                            />
-                            <div className="relative">
-                                <span className="absolute left-3 top-3 text-gray-500">₹</span>
-                                <input
-                                    type="number" placeholder="Price" required
-                                    value={newService.price} onChange={e => setNewService({ ...newService, price: e.target.value })}
-                                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-black focus:ring-black p-3 pl-8 border"
-                                />
-                            </div>
-                        </div>
-                        <input
-                            type="text" placeholder="Description"
-                            value={newService.description} onChange={e => setNewService({ ...newService, description: e.target.value })}
-                            className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-black focus:ring-black p-3 border"
-                        />
-                        <button type="submit" className="w-full bg-black hover:bg-gray-800 text-white font-medium py-3 rounded-lg transition-colors shadow-sm">
-                            Add Service
-                        </button>
-                    </form>
+                    </div>
                 </div>
             </div>
-
-            {/* Manage Services by Shop */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-                <h3 className="text-xl font-bold text-gray-900 mb-6">Manage Services</h3>
-                <div className="space-y-8">
-                    {shops.map(shop => (
-                        <div key={shop._id} className="border-b border-gray-100 pb-8 last:border-0 last:pb-0">
-                            <h4 className="font-bold text-lg text-gray-800 mb-4 flex items-center">
-                                <span className="mr-2">🏪</span> {shop.name}
-                            </h4>
-                            <div className="pl-4 space-y-3">
-                                {shop.serviceIds && shop.serviceIds.length > 0 ? (
-                                    shop.serviceIds.map(service => (
-                                        <div key={service._id} className="flex justify-between items-center bg-gray-50 p-3 rounded-lg hover:bg-gray-100 transition-colors">
-                                            <div>
-                                                <p className="font-medium text-gray-900">{service.title}</p>
-                                                <p className="text-sm text-gray-500">₹{service.price}</p>
-                                            </div>
-                                            <button
-                                                onClick={async () => {
-                                                    if (!window.confirm(`Delete service "${service.title}"?`)) return;
-                                                    try {
-                                                        await apiRequest(`/services/${service._id}`, 'DELETE');
-                                                        fetchShops();
-                                                        toast.success('Service deleted');
-                                                    } catch (err) {
-                                                        toast.error(err.message);
-                                                    }
-                                                }}
-                                                className="text-red-600 hover:text-red-900 text-sm font-medium border border-red-200 hover:bg-red-50 px-3 py-1 rounded transition-colors"
-                                            >
-                                                Delete
-                                            </button>
-                                        </div>
-                                    ))
-                                ) : (
-                                    <p className="text-sm text-gray-400 italic">No services added yet.</p>
-                                )}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-
         </div>
     );
 };

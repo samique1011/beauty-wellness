@@ -39,6 +39,9 @@ const Navbar = () => {
                                 My Dashboard
                             </Link>
                         )}
+                        <span className="text-white font-medium px-2">
+                            Hello, {user.name?.split(' ')[0]}
+                        </span>
                         <button
                             onClick={handleLogout}
                             className="bg-white hover:bg-gray-100 text-black px-4 py-2 rounded-lg font-bold shadow-sm transition-all transform hover:-translate-y-0.5"
@@ -51,7 +54,7 @@ const Navbar = () => {
                         <Link to="/login" className="text-gray-300 hover:text-white font-medium transition-colors">
                             Login
                         </Link>
-                        <Link to="/register" className="bg-white hover:bg-gray-100 text-black px-5 py-2 rounded-lg font-bold shadow-md transition-all transform hover:-translate-y-0.5">
+                        <Link to="/login" className="bg-white hover:bg-gray-100 text-black px-5 py-2 rounded-lg font-bold shadow-md transition-all transform hover:-translate-y-0.5">
                             Get Started
                         </Link>
                     </>

@@ -20,7 +20,9 @@ const shopSchema = new mongoose.Schema({
     location: { type: String, required: true },
     description: { type: String }, // New field
     serviceIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Service' }],
-    image: { type: String } // URL or placeholder
+    image: { type: String }, // URL or placeholder
+    adminId: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', unique: true, required: true }, // Linked to Admin
+    visits: { type: Number, default: 0 } // Track profile visits
 });
 
 // Service Schema
@@ -28,7 +30,11 @@ const serviceSchema = new mongoose.Schema({
     shopid: { type: mongoose.Schema.Types.ObjectId, ref: 'Shop', required: true },
     title: { type: String, required: true },
     description: { type: String },
-    price: { type: Number, required: true }
+    price: { type: Number, required: true },
+    availability: {
+        startTime: { type: String, required: true }, // e.g. "09:00"
+        endTime: { type: String, required: true }    // e.g. "17:00"
+    }
 });
 
 // Booking Schema

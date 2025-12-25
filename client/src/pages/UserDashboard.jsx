@@ -39,17 +39,20 @@ const UserDashboard = () => {
                         <div key={booking._id} className="p-6 hover:bg-gray-50 transition-colors">
                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
                                 <div>
-                                    <h3 className="text-lg font-bold text-gray-900">{booking.serviceId?.title || 'Unknown Service'}</h3>
-                                    <p className="text-gray-500 mt-1 flex items-center">
-                                        <span className="mr-2">📅</span> {booking.date}
-                                        <span className="mx-2">|</span>
-                                        <span className="mr-2">⏰</span> {booking.time}
+                                    <h3 className="text-xl font-bold text-gray-900">{booking.serviceId?.title || 'Unknown Service'}</h3>
+                                    <p className="text-gray-700 font-medium mt-1">
+                                        {booking.serviceId?.shopid?.name || 'Unknown Shop'}
+                                        <span className="text-gray-400 text-sm font-normal ml-2">({booking.serviceId?.shopid?.location || 'Unknown'})</span>
+                                    </p>
+                                    <p className="text-gray-500 mt-2 flex items-center text-sm">
+                                        <span className="bg-gray-100 p-1 rounded mr-2">📅 {booking.date}</span>
+                                        <span className="bg-gray-100 p-1 rounded">⏰ {booking.time}</span>
                                     </p>
                                 </div>
                                 <span className={`mt-4 sm:mt-0 px-3 py-1 rounded-full text-sm font-medium
                                     ${booking.status === 'confirmed' ? 'bg-green-100 text-green-800' :
-                                        booking.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 
-                                        booking.status === 'cancelled' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>
+                                        booking.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                            booking.status === 'cancelled' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>
                                     {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
                                 </span>
                             </div>

@@ -19,8 +19,7 @@ const ShopDetails = () => {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const shops = await apiRequest('/shops');
-                const foundShop = shops.find(s => s._id === id);
+                const foundShop = await apiRequest(`/shops/${id}`);
                 setShop(foundShop);
 
                 if (foundShop) {
@@ -44,11 +43,20 @@ const ShopDetails = () => {
         if (!token) return toast.error('Please login to book');
 
         // Date and Time Validation
+        // Date and Time Validation
         const selectedDate = new Date(`${bookingData.date}T${bookingData.time}`);
         const now = new Date();
 
         if (selectedDate < now) {
             return toast.error('Cannot book appointments in the past');
+        }
+
+        // Check availability frame
+        if (bookingService.availability) {
+            const { startTime, endTime } = bookingService.availability;
+            if (bookingData.time < startTime || bookingData.time > endTime) {
+                return toast.error(`Booking must be between ${startTime} and ${endTime}`);
+            }
         }
 
         try {
@@ -228,6 +236,11 @@ const ShopDetails = () => {
                                                 onChange={e => setBookingData({ ...bookingData, date: e.target.value })}
                                                 className="border rounded-md w-full p-2"
                                             />
+                                            {bookingService.availability && (
+                                                <p className="text-xs text-blue-600 mt-1">
+                                                    Available: {bookingService.availability.startTime} - {bookingService.availability.endTime}
+                                                </p>
+                                            )}
                                         </div>
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-1">Time</label>
